@@ -3,7 +3,8 @@
 import fs from "fs";
 import path from "path";
 import { ChatOpenAI } from "@langchain/openai";
-import { SystemMessage, HumanMessage, AIMessage } from "@langchain/core/messages";
+import { SystemMessage, HumanMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
+
 
 function getEnvKeyManually(): string {
   try {
@@ -188,7 +189,7 @@ Hãy giữ giọng điệu chuyên nghiệp, đồng cảm, khoa học của m�
       },
     });
 
-    const messages = [
+    const messages: BaseMessage[] = [
       new SystemMessage(systemPrompt),
     ];
 
