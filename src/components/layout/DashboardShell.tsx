@@ -3,8 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText, Heart, Key, Languages, Settings, Sparkles } from "lucide-react";
-import { ApiKeyPanel } from "@/components/layout/ApiKeyPanel";
+import { FileText, Heart, Languages, Settings, Sparkles } from "lucide-react";
 import { FatalAlert } from "@/components/layout/FatalAlert";
 import { useApp } from "@/context/AppContext";
 import type { PageSlug } from "@/lib/types";
@@ -41,7 +40,7 @@ const NAV: {
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { lang, setLang, nvidiaApiKey, showKeyInput, setShowKeyInput } = useApp();
+  const { lang, setLang } = useApp();
 
   return (
     <div className="min-h-screen flex page-bg">
@@ -52,7 +51,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               <Heart className="w-5 h-5 text-white" />
             </div>
             <div>
-              <p className="text-[11px] font-bold tracking-tight leading-none text-sky-900">CARDIO SHIELD</p>
+              <p className="text-[10px] font-bold tracking-tight leading-none text-sky-900 uppercase">LÁ CHẮN TÂM MẠCH</p>
               <p className="text-[9px] text-sky-600 font-medium">ESC/EAS 2025</p>
             </div>
           </Link>
@@ -80,19 +79,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
         <div className="p-3 border-t border-sky-100 flex flex-col gap-2">
           <button
-            onClick={() => setShowKeyInput(!showKeyInput)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
-              nvidiaApiKey
-                ? "bg-sky-50 text-sky-700 border border-sky-200"
-                : "bg-orange-50 text-orange-700 border border-orange-200"
-            }`}
-          >
-            <Key className="w-3.5 h-3.5" />
-            {nvidiaApiKey ? "API OK" : "API Key"}
-          </button>
-          <button
             onClick={() => setLang(lang === "vi" ? "en" : "vi")}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold text-slate-500 hover:text-sky-700 hover:bg-sky-50 cursor-pointer"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold text-slate-500 hover:text-sky-700 hover:bg-sky-50 cursor-pointer w-full justify-start"
           >
             <Languages className="w-3.5 h-3.5" />
             {lang === "vi" ? "English" : "Tiếng Việt"}
@@ -101,15 +89,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 min-h-screen">
-        <ApiKeyPanel />
-
         <main className="flex-1 flex flex-col p-4 gap-3 min-h-0 overflow-hidden">
           <FatalAlert />
           <div className="flex-1 min-h-0 overflow-auto scrollbar-thin">{children}</div>
         </main>
 
         <footer className="shrink-0 h-9 bg-white border-t border-sky-100 flex items-center justify-center text-[10px] text-slate-400">
-          CardioShield © 2026 · ESC/EAS 2025 Focused Update
+          Lá Chắn Tâm Mạch © 2026 · ESC/EAS 2025 Focused Update
         </footer>
       </div>
     </div>

@@ -1,37 +1,11 @@
 "use server";
 
-import fs from "fs";
-import path from "path";
 import type { ChatMessage, PatientData } from "@/app/actions";
 import { buildClinicalSummary } from "@/lib/agents/clinical-summary";
 import { MASTER_AGENT, SPECIALIST_AGENTS } from "@/lib/agents/config";
 import { callLLM, callLLMWithChat } from "@/lib/agents/llm";
 import { getAllEffectivePrompts } from "@/lib/agents/prompts";
 import type { AgentKey, SpecialistKey } from "@/lib/types";
-
-function readEnvKey(name: string): string {
-  const fromProcess = process.env[name] || "";
-  if (fromProcess) return fromProcess.trim();
-
-  try {
-    const envPath = path.join(process.cwd(), ".env");
-    if (fs.existsSync(envPath)) {
-      const content = fs.readFileSync(envPath, "utf-8");
-      const match = content.match(new RegExp(`^${name}\\s*=\\s*(.*)$`, "m"));
-      if (match?.[1]) return match[1].replace(/\r/g, "").trim().replace(/['"]/g, "");
-    }
-  } catch {
-    /* ignore */
-  }
-  return "";
-}
-
-function resolveKeys(openRouterKey: string, nvidiaKey: string) {
-  return {
-    openRouter: openRouterKey || readEnvKey("OPENROUTER_API_KEY"),
-    nvidia: nvidiaKey || readEnvKey("NVIDIA_API_KEY"),
-  };
-}
 
 function getAgentMeta(key: AgentKey) {
   if (key === "master") return MASTER_AGENT;
@@ -72,8 +46,6 @@ Hãy phân tích hồ sơ bệnh nhân trên theo đúng 5 PHASE trong system pr
 export async function runSingleAgent(
   agentKey: AgentKey,
   patientData: PatientData,
-  openRouterKey: string,
-  nvidiaKey: string,
   options?: {
     clinicalNotes?: string;
     visitDate?: string;
@@ -81,7 +53,6 @@ export async function runSingleAgent(
     specialistOutputs?: Partial<Record<SpecialistKey, string>>;
   }
 ): Promise<AgentRunResult> {
-  const keys = resolveKeys(openRouterKey, nvidiaKey);
   const agent = getAgentMeta(agentKey);
   const prompts = getAllEffectivePrompts(options?.customPrompts);
   const clinicalSummary = buildClinicalSummary(patientData, {
@@ -112,10 +83,8 @@ Hãy tổng hợp thành BÁO CÁO MDT hoàn chỉnh theo MASTER prompt.`;
       systemPrompt: prompts[agentKey],
       humanContent,
       model: agent.model,
-      provider: agent.provider,
-      openRouterKey: keys.openRouter,
-      nvidiaKey: keys.nvidia,
       temperature: agentKey === "master" ? 0.25 : 0.3,
+      agentKey,
     });
     return {
       key: agentKey,
@@ -141,15 +110,12 @@ export async function runAgentChat(
   agentKey: AgentKey,
   patientData: PatientData,
   chatHistory: ChatMessage[],
-  openRouterKey: string,
-  nvidiaKey: string,
   options?: {
     clinicalNotes?: string;
     visitDate?: string;
     customPrompts?: PromptOverrides;
   }
 ): Promise<AgentRunResult> {
-  const keys = resolveKeys(openRouterKey, nvidiaKey);
   const agent = getAgentMeta(agentKey);
   const prompts = getAllEffectivePrompts(options?.customPrompts);
   const clinicalSummary = buildClinicalSummary(patientData, {
@@ -164,9 +130,7 @@ export async function runAgentChat(
       systemPrompt: enrichedSystem,
       chatHistory,
       model: agent.model,
-      provider: agent.provider,
-      openRouterKey: keys.openRouter,
-      nvidiaKey: keys.nvidia,
+      agentKey,
     });
     return {
       key: agentKey,
@@ -190,21 +154,9 @@ export async function runAgentChat(
 
 export async function runMultiAgentMDTAnalysis(
   patientData: PatientData,
-  openRouterKey: string,
-  nvidiaKey: string,
   options?: { clinicalNotes?: string; visitDate?: string; customPrompts?: PromptOverrides }
 ): Promise<MDTAnalysisResult> {
   try {
-    const keys = resolveKeys(openRouterKey, nvidiaKey);
-
-    if (!keys.nvidia) {
-      return {
-        success: false,
-        error:
-          "Thiếu NVIDIA API Key. Đăng ký tại https://build.nvidia.com, tạo API key và thêm NVIDIA_API_KEY vào .env.",
-      };
-    }
-
     const clinicalSummary = buildClinicalSummary(patientData, options);
     const prompts = getAllEffectivePrompts(options?.customPrompts);
 
@@ -212,7 +164,7 @@ export async function runMultiAgentMDTAnalysis(
 
     const specialistResults = await Promise.all(
       SPECIALIST_AGENTS.map((agent) =>
-        runSingleAgent(agent.key, patientData, keys.openRouter, keys.nvidia, {
+        runSingleAgent(agent.key, patientData, {
           ...options,
           customPrompts: prompts,
         })
@@ -234,7 +186,7 @@ export async function runMultiAgentMDTAnalysis(
     ) as Partial<Record<SpecialistKey, string>>;
 
     console.log("[MDT] Invoking Master Agent...");
-    const masterResult = await runSingleAgent("master", patientData, keys.openRouter, keys.nvidia, {
+    const masterResult = await runSingleAgent("master", patientData, {
       ...options,
       customPrompts: prompts,
       specialistOutputs,

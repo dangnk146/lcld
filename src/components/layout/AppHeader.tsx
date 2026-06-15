@@ -15,7 +15,7 @@ const NAV_ITEMS: { slug: PageSlug; href: string; vi: string; en: string }[] = [
 
 export function AppHeader() {
   const pathname = usePathname();
-  const { lang, setLang, nvidiaApiKey, showKeyInput, setShowKeyInput } = useApp();
+  const { lang, setLang, showKeyInput, setShowKeyInput } = useApp();
 
   return (
     <header className="bg-white border-b border-zinc-200 sticky top-0 z-50">
@@ -29,7 +29,7 @@ export function AppHeader() {
             <span className="font-semibold text-zinc-700">uit-cardio</span>
             <span className="text-zinc-300">/</span>
             <Link href="/overview" className="font-semibold text-zinc-900 tracking-tight hover:underline">
-              cardioshield-2025
+              la-chan-tam-mach-2025
             </Link>
             <div className="ml-3 hidden sm:flex items-center gap-1.5 bg-zinc-100 text-zinc-600 border border-zinc-200/80 rounded-full px-2.5 py-0.5 text-[10px] font-semibold">
               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
@@ -38,17 +38,12 @@ export function AppHeader() {
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowKeyInput(!showKeyInput)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-bold border transition-all cursor-pointer ${
-                nvidiaApiKey
-                  ? "bg-zinc-50 text-zinc-850 border-zinc-200 hover:bg-zinc-100"
-                  : "bg-rose-50 text-rose-600 border-rose-250 hover:bg-rose-100/50"
-              }`}
+            <div
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-bold border bg-emerald-50 text-emerald-700 border-emerald-250"
             >
-              <Key className="w-3.5 h-3.5" />
-              <span>{nvidiaApiKey ? "NVIDIA API OK" : "Missing NVIDIA API Key"}</span>
-            </button>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>OpenClaw Gateway Connected</span>
+            </div>
 
             <button
               onClick={() => setLang(lang === "vi" ? "en" : "vi")}

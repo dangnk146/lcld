@@ -7,7 +7,7 @@ import { PatientSidebar } from "@/components/workspace/PatientSidebar";
 import { PatientStatusPanel } from "@/components/workspace/PatientStatusPanel";
 import { Table4Section } from "@/components/workspace/Table4Section";
 
-type RightTab = "status" | "reference" | "table4";
+type RightTab = "status" | "reference";
 
 export function TabPatients() {
   const [rightTab, setRightTab] = useState<RightTab>("status");
@@ -51,21 +51,11 @@ export function TabPatients() {
             >
               Đối chiếu ESC/EAS 2025
             </button>
-            <button
-              type="button"
-              onClick={() => setRightTab("table4")}
-              className={`flex-1 text-[10px] font-semibold py-2 cursor-pointer transition-colors ${
-                rightTab === "table4" ? "bg-sky-700 text-white" : "text-slate-600 hover:bg-sky-50"
-              }`}
-            >
-              Bảng 4
-            </button>
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin pr-1">
             {rightTab === "status" && <PatientStatusPanel />}
             {rightTab === "reference" && <PaperReferencePanel />}
-            {rightTab === "table4" && <Table4Section />}
           </div>
         </div>
       </div>

@@ -10,7 +10,7 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "CardioShield 2025",
+  title: "Lá Chắn Tâm Mạch 2025",
   description: "Phân tầng nguy cơ tim mạch & chiến lược can thiệp lipid theo ESC/EAS 2025",
 };
 

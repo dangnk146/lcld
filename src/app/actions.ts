@@ -1,26 +1,7 @@
 "use server";
 
-import fs from "fs";
-import path from "path";
-import { ChatOpenAI } from "@langchain/openai";
-import { SystemMessage, HumanMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
-
-
-function getEnvKeyManually(): string {
-  try {
-    const envPath = path.join(process.cwd(), ".env");
-    if (fs.existsSync(envPath)) {
-      const content = fs.readFileSync(envPath, "utf-8");
-      const match = content.match(/^OPENROUTER_API_KEY\s*=\s*(.*)$/m);
-      if (match && match[1]) {
-        return match[1].replace(/\r/g, "").trim().replace(/['"]/g, ""); // remove carriage returns, trim, remove quotes
-      }
-    }
-  } catch (e) {
-    console.error("Failed to read .env file manually:", e);
-  }
-  return "";
-}
+const OPENCLAW_BASE = "http://127.0.0.1:18789/v1";
+const OPENCLAW_API_KEY = "openclaw-gateway-secure-token-2026";
 
 export interface PatientData {
   name: string;
@@ -116,50 +97,46 @@ Yêu cầu báo cáo phải cực kỳ chi tiết, khoa học và bao gồm các
 
 Hãy giữ giọng điệu chuyên nghiệp, đồng cảm, khoa học của một giáo sư tim mạch hàng đầu đầu ngành.`;
 
-async function callAgent(
+async function callOpenClaw(
   systemPrompt: string,
-  humanContent: string,
-  apiKey: string,
-  modelName: string
+  messages: { role: string; content: string }[],
+  agentKey?: string
 ): Promise<string> {
-  const chat = new ChatOpenAI({
-    apiKey: apiKey,
-    openAIApiKey: apiKey,
-    modelName: modelName || "google/gemini-2.5-flash",
-    temperature: 0.3,
-    configuration: {
-      baseURL: "https://openrouter.ai/api/v1",
+  const mappedAgentId = agentKey === "master" ? "main" : agentKey || "main";
+
+  const response = await fetch(`${OPENCLAW_BASE}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENCLAW_API_KEY}`,
+      "x-openclaw-agent-id": mappedAgentId,
     },
+    body: JSON.stringify({
+      model: "openclaw",
+      temperature: 0.3,
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...messages,
+      ],
+    }),
   });
 
-  const messages = [
-    new SystemMessage(systemPrompt),
-    new HumanMessage(humanContent),
-  ];
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`OpenClaw Gateway lỗi ${response.status}: ${text}`);
+  }
 
-  const response = await chat.invoke(messages);
-  return response.content.toString();
+  const json = await response.json();
+  return json.choices?.[0]?.message?.content ?? "";
 }
 
 export async function analyzePatientCardioRisk(
   patientData: PatientData,
   chatHistory: ChatMessage[],
-  apiKey: string,
-  modelName: string
+  _apiKey: string,
+  _modelName: string
 ) {
   try {
-    let finalApiKey = apiKey || process.env.OPENROUTER_API_KEY || "";
-    if (!finalApiKey) {
-      finalApiKey = getEnvKeyManually();
-    }
-    console.log("CardioShield AI System - Key loaded from client:", apiKey ? "YES" : "NO", "Key loaded from process.env:", process.env.OPENROUTER_API_KEY ? "YES" : "NO", "Key loaded manually:", finalApiKey ? "YES" : "NO");
-    if (!finalApiKey) {
-      return {
-        success: false,
-        error: "Vui lòng cung cấp OpenRouter API Key trong .env hoặc nhập trực tiếp trên giao diện.",
-      };
-    }
-
     const lipidUnit = patientData.unit === "mmol" ? "mmol/L" : "mg/dL";
     const calculatedNonHdl = (patientData.totalChol - patientData.hdlChol).toFixed(2);
     
@@ -195,17 +172,17 @@ export async function analyzePatientCardioRisk(
 
     // Multi-agent diagnostic logic when initial run (chatHistory empty)
     if (chatHistory.length === 0) {
-      console.log("CardioShield Multi-Agent System - Launching 5 Specialists in Parallel...");
+      console.log("CardioShield Multi-Agent System - Launching 5 Specialists via OpenClaw...");
       
       const [cardiologist, lipidologist, endocrinologist, nephrologist, pharmacologist] = await Promise.all([
-        callAgent(CARDIOLOGIST_PROMPT, clinicalSummary, finalApiKey, modelName),
-        callAgent(LIPIDOLOGIST_PROMPT, clinicalSummary, finalApiKey, modelName),
-        callAgent(ENDOCRINOLOGIST_PROMPT, clinicalSummary, finalApiKey, modelName),
-        callAgent(NEPHROLOGIST_PROMPT, clinicalSummary, finalApiKey, modelName),
-        callAgent(PHARMACOLOGIST_PROMPT, clinicalSummary, finalApiKey, modelName),
+        callOpenClaw(CARDIOLOGIST_PROMPT, [{ role: "user", content: clinicalSummary }], "cardiologist"),
+        callOpenClaw(LIPIDOLOGIST_PROMPT, [{ role: "user", content: clinicalSummary }], "lipidologist"),
+        callOpenClaw(ENDOCRINOLOGIST_PROMPT, [{ role: "user", content: clinicalSummary }], "endocrinologist"),
+        callOpenClaw(NEPHROLOGIST_PROMPT, [{ role: "user", content: clinicalSummary }], "nephrologist"),
+        callOpenClaw(PHARMACOLOGIST_PROMPT, [{ role: "user", content: clinicalSummary }], "pharmacologist"),
       ]);
 
-      console.log("CardioShield Multi-Agent System - Specialists finished. Invoking Master Synthesizer...");
+      console.log("CardioShield Multi-Agent System - Specialists finished. Invoking Master via OpenClaw...");
 
       const masterInput = `
 ${clinicalSummary}
@@ -230,7 +207,7 @@ ${pharmacologist}
 ---
 `;
 
-      const masterContent = await callAgent(MASTER_PROMPT, masterInput, finalApiKey, modelName);
+      const masterContent = await callOpenClaw(MASTER_PROMPT, [{ role: "user", content: masterInput }], "master");
 
       return {
         success: true,
@@ -244,40 +221,24 @@ ${pharmacologist}
         }
       };
     } else {
-      // Normal follow-up chat with Master Agent
-      console.log("CardioShield Multi-Agent System - Follow up chat with Master Agent...");
+      // Normal follow-up chat with Master Agent via OpenClaw
+      console.log("CardioShield Multi-Agent System - Follow up chat with Master Agent via OpenClaw...");
       
-      const chat = new ChatOpenAI({
-        apiKey: finalApiKey,
-        openAIApiKey: finalApiKey,
-        modelName: modelName || "google/gemini-2.5-flash",
-        temperature: 0.3,
-        configuration: {
-          baseURL: "https://openrouter.ai/api/v1",
-        },
-      });
-
-      const messages: BaseMessage[] = [
-        new SystemMessage(MASTER_PROMPT),
-      ];
-
-      chatHistory.forEach((msg, idx) => {
+      const messages = chatHistory.map((msg, idx) => {
         if (msg.role === "user") {
           if (idx === chatHistory.length - 1) {
-            messages.push(new HumanMessage(`${clinicalSummary}\n\nCâu hỏi/Yêu cầu của người dùng: ${msg.content}`));
-          } else {
-            messages.push(new HumanMessage(msg.content));
+            return { role: "user", content: `${clinicalSummary}\n\nCâu hỏi/Yêu cầu của người dùng: ${msg.content}` };
           }
-        } else {
-          messages.push(new AIMessage(msg.content));
+          return { role: "user", content: msg.content };
         }
+        return { role: "assistant", content: msg.content };
       });
 
-      const response = await chat.invoke(messages);
+      const content = await callOpenClaw(MASTER_PROMPT, messages, "master");
 
       return {
         success: true,
-        content: response.content.toString(),
+        content,
       };
     }
   } catch (error: any) {

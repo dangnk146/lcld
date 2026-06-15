@@ -20,9 +20,7 @@ export type PageSlug = "patients" | "ai-agent" | "settings" | "workspace" | "ove
 export type SpecialistKey =
   | "cardiologist"
   | "lipidologist"
-  | "endocrinologist"
-  | "nephrologist"
-  | "pharmacologist";
+  | "endocrinologist";
 export type AgentKey = SpecialistKey | "master";
 
 export interface RiskAssessment {

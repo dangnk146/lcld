@@ -2,16 +2,17 @@
 
 import { ChevronDown, ChevronRight, Loader2, Skull, Sparkles, User } from "lucide-react";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { generatePatientAvatar } from "@/app/actions/generate-avatar";
 import { useApp } from "@/context/AppContext";
 import { buildAvatarPrompt } from "@/lib/patient-avatars";
 import { calculateRisk } from "@/lib/risk";
 
 export function PatientSidebar() {
+  const router = useRouter();
   const {
     patients,
     lang,
-    nvidiaApiKey,
     activePatientId,
     activeVisitIndex,
     setActivePatientId,
@@ -30,23 +31,19 @@ export function PatientSidebar() {
   const togglePatient = (id: string) => {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
     setActivePatientId(id);
+    router.push(`/patients/${id}`);
   };
 
   const selectVisit = (patientId: string, visitIndex: number) => {
     setActivePatientId(patientId);
     setActiveVisitIndex(visitIndex);
     setExpanded((prev) => ({ ...prev, [patientId]: true }));
+    router.push(`/patients/${patientId}`);
   };
 
   const handleGenAvatar = async (e: React.MouseEvent, patientId: string) => {
     e.stopPropagation();
     setGenError(null);
-
-    if (!nvidiaApiKey) {
-      setShowKeyInput(true);
-      setGenError("Cần NVIDIA API Key (tab Cấu hình)");
-      return;
-    }
 
     const p = patients.find((x) => x.id === patientId);
     if (!p) return;
@@ -56,7 +53,7 @@ export function PatientSidebar() {
 
     setGeneratingId(patientId);
     const prompt = buildAvatarPrompt(pd.name, pd.age, pd.sex, p.status);
-    const result = await generatePatientAvatar(prompt, nvidiaApiKey);
+    const result = await generatePatientAvatar(prompt);
     setGeneratingId(null);
 
     if (result.success && result.dataUrl) {
@@ -134,7 +131,7 @@ export function PatientSidebar() {
 
               <button
                 type="button"
-                title="Gen avatar (NVIDIA FLUX)"
+                title="Gen avatar (Robohash)"
                 onClick={(e) => handleGenAvatar(e, p.id)}
                 disabled={isGenerating}
                 className="shrink-0 w-7 h-7 rounded-lg bg-orange-500 hover:bg-orange-600 text-white flex items-center justify-center shadow-sm cursor-pointer disabled:opacity-60"

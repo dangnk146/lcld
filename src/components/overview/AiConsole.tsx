@@ -6,7 +6,6 @@ import {
   Brain,
   Copy,
   Download,
-  Key,
   RefreshCw,
   Send,
   Sparkles,
@@ -17,8 +16,6 @@ import { useApp } from "@/context/AppContext";
 export function AiConsole() {
   const {
     lang,
-    apiKey,
-    setShowKeyInput,
     chatHistory,
     userInput,
     setUserInput,
@@ -61,27 +58,16 @@ export function AiConsole() {
               {lang === "vi" ? "Bác sĩ ảo AI đã sẵn sàng" : "AI Clinical Auditor Ready"}
             </h3>
             <p className="text-xs text-zinc-500 max-w-xs leading-relaxed">
-              {apiKey ? translations[lang].aiWelcome : translations[lang].aiWelcome}
+              {translations[lang].aiWelcome}
             </p>
-            {!apiKey && (
-              <button
-                onClick={() => setShowKeyInput(true)}
-                className="mt-4 flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-600 text-xs px-3 py-1.5 rounded-lg font-bold"
-              >
-                <Key className="w-3.5 h-3.5" />
-                <span>{lang === "vi" ? "Nhập OpenRouter API Key" : "Enter API Key"}</span>
-              </button>
-            )}
-            {apiKey && (
-              <button
-                onClick={triggerAiAudit}
-                disabled={loadingAi}
-                className="mt-6 flex items-center gap-2 bg-black hover:bg-zinc-800 text-white font-bold text-xs px-5 py-3 rounded-lg cursor-pointer disabled:opacity-50"
-              >
-                {loadingAi ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
-                <span>{translations[lang].runAiBtn}</span>
-              </button>
-            )}
+            <button
+              onClick={triggerAiAudit}
+              disabled={loadingAi}
+              className="mt-6 flex items-center gap-2 bg-black hover:bg-zinc-800 text-white font-bold text-xs px-5 py-3 rounded-lg cursor-pointer disabled:opacity-50"
+            >
+              {loadingAi ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
+              <span>{translations[lang].runAiBtn}</span>
+            </button>
           </div>
         ) : (
           <div className="flex flex-col gap-4 overflow-y-auto pr-1">
@@ -146,7 +132,7 @@ export function AiConsole() {
       )}
 
       <p className="mt-3 text-[10px] text-zinc-500 text-center">
-        {lang === "vi" ? "Phân tích Multi-Agent (5 model khác nhau) tại " : "Full Multi-Agent analysis (5 models) at "}
+        {lang === "vi" ? "Phân tích Multi-Agent (2 model khác nhau) tại " : "Full Multi-Agent analysis (2 models) at "}
         <Link href="/mdt-analysis" className="text-violet-600 font-bold hover:underline">
           /mdt-analysis
         </Link>

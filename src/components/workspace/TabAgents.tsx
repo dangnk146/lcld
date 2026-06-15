@@ -6,6 +6,8 @@ import { runAgentChat, runSingleAgent } from "@/app/actions/multi-agent";
 import { AgentChatPanel } from "@/components/workspace/AgentChatPanel";
 import { PatientSidebar } from "@/components/workspace/PatientSidebar";
 import { PatientStatusPanel } from "@/components/workspace/PatientStatusPanel";
+import { buildClinicalSummary } from "@/lib/agents/clinical-summary";
+import { getAllEffectivePrompts } from "@/lib/agents/prompts";
 import { MASTER_AGENT, SPECIALIST_AGENTS } from "@/lib/agents/config";
 import { loadPromptOverrides } from "@/lib/agents/prompts";
 import { useApp } from "@/context/AppContext";
@@ -23,8 +25,6 @@ const EMPTY_INPUTS: Record<AgentKey, string> = {
   cardiologist: "",
   lipidologist: "",
   endocrinologist: "",
-  nephrologist: "",
-  pharmacologist: "",
   master: "",
 };
 
@@ -35,9 +35,6 @@ export function TabAgents() {
     activeVisit,
     activePatientId,
     activeVisitIndex,
-    apiKey,
-    nvidiaApiKey,
-    setShowKeyInput,
     agentChats,
     setAgentChats,
     agentLoading,
@@ -64,75 +61,161 @@ export function TabAgents() {
   const setInput = (key: AgentKey, v: string) => setInputs((prev) => ({ ...prev, [key]: v }));
 
   const runAutoAnalysis = async () => {
-    if (!nvidiaApiKey) {
-      setShowKeyInput(true);
-      setError("Cần NVIDIA API Key (tab Cấu hình).");
-      return;
-    }
-
     setAutoRunning(true);
     setError("");
-    setAgentLoading(
-      Object.fromEntries(
-        [...SPECIALIST_AGENTS.map((a) => a.key), "master"].map((k) => [k, true])
-      ) as Record<AgentKey, boolean>
-    );
+    const initialLoading: Partial<Record<AgentKey, boolean>> = {};
+    const initialChats: Partial<Record<AgentKey, { role: "user" | "assistant"; content: string }[]>> = {};
+    SPECIALIST_AGENTS.forEach(a => {
+      initialLoading[a.key] = false;
+      initialChats[a.key] = [];
+    });
+    initialLoading.master = false;
+    initialChats.master = [];
+    
+    setAgentLoading(initialLoading);
+    setAgentChats(initialChats);
 
     const customPrompts = { ...loadPromptOverrides(), ...promptOverrides };
-    const ctx = {
+    const prompts = getAllEffectivePrompts(customPrompts);
+    const clinicalSummary = buildClinicalSummary(patient, {
       clinicalNotes: activeVisit?.clinicalNotes,
       visitDate: activeVisit?.visitDate,
-      customPrompts,
-    };
-
-    const specialistOutputs: Partial<Record<SpecialistKey, string>> = {};
-
-    await Promise.all(
-      SPECIALIST_AGENTS.map(async (agent) => {
-        const result = await runSingleAgent(agent.key, patient, apiKey, nvidiaApiKey, ctx);
-        if (result.content) {
-          specialistOutputs[agent.key] = result.content;
-          setAgentChats((prev) => ({
-            ...prev,
-            [agent.key]: [{ role: "assistant", content: result.content }],
-          }));
-        } else if (result.error) {
-          setAgentChats((prev) => ({
-            ...prev,
-            [agent.key]: [{ role: "assistant", content: `Lỗi: ${result.error}` }],
-          }));
-        }
-        setAgentLoading((prev) => ({ ...prev, [agent.key]: false }));
-      })
-    );
-
-    const masterResult = await runSingleAgent("master", patient, apiKey, nvidiaApiKey, {
-      ...ctx,
-      specialistOutputs,
     });
 
-    if (masterResult.content) {
-      setAgentChats((prev) => ({
-        ...prev,
-        master: [{ role: "assistant", content: masterResult.content }],
-      }));
-    } else if (masterResult.error) {
-      setAgentChats((prev) => ({
-        ...prev,
-        master: [{ role: "assistant", content: `Lỗi Master: ${masterResult.error}` }],
-      }));
+    let specialistOutputs: Record<string, string> = {};
+
+    try {
+      // 1. Run specialists sequentially
+      for (const agent of SPECIALIST_AGENTS) {
+        setAgentLoading(prev => ({ ...prev, [agent.key]: true }));
+        try {
+          const res = await fetch("/api/openclaw/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              agentId: agent.key,
+              payload: {
+                model: "openclaw",
+                stream: true,
+                temperature: 0.25,
+                messages: [
+                  { role: "system", content: prompts[agent.key] },
+                  { role: "user", content: clinicalSummary }
+                ]
+              }
+            })
+          });
+
+          if (!res.ok) throw new Error(`OpenClaw error: ${res.status}`);
+
+          const reader = res.body?.getReader();
+          const decoder = new TextDecoder("utf-8");
+          let agentContent = "";
+
+          if (reader) {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              const chunk = decoder.decode(value, { stream: true });
+              const lines = chunk.split("\n");
+              for (const line of lines) {
+                if (line.startsWith("data: ") && line !== "data: [DONE]") {
+                  try {
+                    const data = JSON.parse(line.slice(6));
+                    const delta = data.choices?.[0]?.delta;
+                    if (delta?.content) {
+                      agentContent += delta.content;
+                      setAgentChats(prev => ({
+                        ...prev,
+                        [agent.key]: [{ role: "assistant", content: agentContent }]
+                      }));
+                    }
+                  } catch (e) {}
+                }
+              }
+            }
+          }
+          specialistOutputs[agent.key] = agentContent;
+        } catch (err: any) {
+          specialistOutputs[agent.key] = `Error: ${err.message}`;
+          setAgentChats(prev => ({
+            ...prev,
+            [agent.key]: [{ role: "assistant", content: `Error: ${err.message}` }]
+          }));
+        } finally {
+          setAgentLoading(prev => ({ ...prev, [agent.key]: false }));
+        }
+      }
+
+      // 2. Run master agent
+      setAgentLoading(prev => ({ ...prev, master: true }));
+      const masterInput = `
+${clinicalSummary}
+
+--- Ý KIẾN CHẨN ĐOÁN LÂM SÀNG TỪ HỘI ĐỒNG CHUYÊN GIA ---
+
+${SPECIALIST_AGENTS.map((a, i) => `${i+1}. Ý KIẾN ${a.roleVi.toUpperCase()}:\n${specialistOutputs[a.key] || "Không có phản hồi."}`).join("\n\n")}
+
+---
+      `;
+
+      const res = await fetch("/api/openclaw/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentId: "main",
+          payload: {
+            model: "openclaw",
+            stream: true,
+            temperature: 0.25,
+            messages: [
+              { role: "system", content: prompts.master },
+              { role: "user", content: masterInput }
+            ]
+          }
+        })
+      });
+
+      if (!res.ok) throw new Error(`OpenClaw error: ${res.status}`);
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let masterContent = "";
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split("\n");
+          for (const line of lines) {
+            if (line.startsWith("data: ") && line !== "data: [DONE]") {
+              try {
+                const data = JSON.parse(line.slice(6));
+                const delta = data.choices?.[0]?.delta;
+                if (delta?.content) {
+                  masterContent += delta.content;
+                  setAgentChats(prev => ({
+                    ...prev,
+                    master: [{ role: "assistant", content: masterContent }]
+                  }));
+                }
+              } catch (e) {}
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setAgentLoading(prev => ({ ...prev, master: false }));
+      setAutoRunning(false);
     }
-    setAgentLoading((prev) => ({ ...prev, master: false }));
-    setAutoRunning(false);
   };
 
   const sendChat = async (agentKey: AgentKey) => {
     const text = inputs[agentKey].trim();
     if (!text || agentLoading[agentKey]) return;
-    if (!nvidiaApiKey) {
-      setShowKeyInput(true);
-      return;
-    }
 
     const prev = agentChats[agentKey] || [];
     const newHistory = [...prev, { role: "user" as const, content: text }];
@@ -141,7 +224,7 @@ export function TabAgents() {
     setAgentLoading((prev) => ({ ...prev, [agentKey]: true }));
 
     const customPrompts = { ...loadPromptOverrides(), ...promptOverrides };
-    const result = await runAgentChat(agentKey, patient, newHistory, apiKey, nvidiaApiKey, {
+    const result = await runAgentChat(agentKey, patient, newHistory, {
       clinicalNotes: activeVisit?.clinicalNotes,
       visitDate: activeVisit?.visitDate,
       customPrompts,

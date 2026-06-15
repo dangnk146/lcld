@@ -19,8 +19,6 @@ export const PROMPT_FILE_MAP: Record<AgentKey, { file: string; label: string }> 
   cardiologist: { file: "src/lib/agents/prompts/cardiologist.ts", label: "Bác sĩ Tim mạch" },
   lipidologist: { file: "src/lib/agents/prompts/lipidologist.ts", label: "Chuyên gia Lipid" },
   endocrinologist: { file: "src/lib/agents/prompts/endocrinologist.ts", label: "Bác sĩ Nội tiết" },
-  nephrologist: { file: "src/lib/agents/prompts/nephrologist.ts", label: "Bác sĩ Thận học" },
-  pharmacologist: { file: "src/lib/agents/prompts/pharmacologist.ts", label: "Dược sĩ Lâm sàng" },
   master: { file: "src/lib/agents/prompts/master.ts", label: "Master — Hội đồng MDT" },
 };
 
@@ -28,8 +26,6 @@ export const DEFAULT_PROMPTS: Record<AgentKey, string> = {
   cardiologist: CARDIOLOGIST_PROMPT,
   lipidologist: LIPIDOLOGIST_PROMPT,
   endocrinologist: ENDOCRINOLOGIST_PROMPT,
-  nephrologist: NEPHROLOGIST_PROMPT,
-  pharmacologist: PHARMACOLOGIST_PROMPT,
   master: MASTER_PROMPT,
 };
 

@@ -1,0 +1,89 @@
+{
+  "gateway": {
+    "mode": "local",
+    "bind": "loopback",
+    "auth": {
+      "mode": "token",
+      "token": "openclaw-gateway-secure-token-2026"
+    },
+    "http": {
+      "endpoints": {
+        "chatCompletions": {
+          "enabled": true
+        }
+      }
+    }
+  },
+  "models": {
+    "providers": {
+      "ollama": {
+        "baseUrl": "http://127.0.0.1:11434/v1",
+        "apiKey": "ollama-local",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "gemma4:12b-it-qat",
+            "name": "gemma4:12b-it-qat",
+            "contextWindow": 262144
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "~/.openclaw/workspace",
+      "model": {
+        "primary": "ollama/gemma4:12b-it-qat"
+      },
+      "subagents": {
+        "maxConcurrent": 1
+      }
+    },
+    "list": [
+      {
+        "id": "main",
+        "identity": {
+          "name": "Trưởng khoa Y tế",
+          "theme": "Chief of Medicine / Coordinator",
+          "emoji": "🩺"
+        },
+        "workspace": "~/.openclaw/workspace/main",
+        "subagents": {
+          "allowAgents": [
+            "cardiologist",
+            "lipidologist",
+            "endocrinologist"
+          ]
+        }
+      },
+      {
+        "id": "cardiologist",
+        "identity": {
+          "name": "Bác sĩ Tim mạch",
+          "theme": "Cardiologist",
+          "emoji": "🫀"
+        },
+        "workspace": "~/.openclaw/workspace/bac_si_tim_mach"
+      },
+      {
+        "id": "lipidologist",
+        "identity": {
+          "name": "Chuyên gia Lipid máu",
+          "theme": "Lipidologist",
+          "emoji": "🩸"
+        },
+        "workspace": "~/.openclaw/workspace/chuyen_gia_lipid"
+      },
+      {
+        "id": "endocrinologist",
+        "identity": {
+          "name": "Bác sĩ Nội tiết",
+          "theme": "Endocrinologist",
+          "emoji": "🧬"
+        },
+        "workspace": "~/.openclaw/workspace/bac_si_noi_tiet"
+      }
+    ]
+  }
+}

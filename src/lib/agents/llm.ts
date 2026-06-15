@@ -1,82 +1,90 @@
-import { ChatOpenAI } from "@langchain/openai";
-import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import type { ChatMessage } from "@/app/actions";
-import type { LLMProvider } from "./config";
 
-const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
-const NVIDIA_BASE = "https://integrate.api.nvidia.com/v1";
+const OPENCLAW_BASE = "http://127.0.0.1:18789/v1";
+const OPENCLAW_API_KEY = "openclaw-gateway-secure-token-2026";
 
+/**
+ * Gọi OpenClaw Gateway — endpoint /v1/chat/completions.
+ * Sử dụng header `x-openclaw-agent-id` để định tuyến tới agent tương ứng.
+ */
 export async function callLLM(params: {
   systemPrompt: string;
   humanContent: string;
   model: string;
-  provider: LLMProvider;
-  openRouterKey: string;
-  nvidiaKey: string;
   temperature?: number;
+  agentKey?: string;
 }): Promise<string> {
-  const { systemPrompt, humanContent, model, provider, openRouterKey, nvidiaKey, temperature = 0.3 } = params;
+  const { systemPrompt, humanContent, model, temperature = 0.3, agentKey } = params;
 
-  const apiKey = provider === "nvidia" ? nvidiaKey : openRouterKey;
-  const baseURL = provider === "nvidia" ? NVIDIA_BASE : OPENROUTER_BASE;
+  const mappedAgentId = agentKey === "master" ? "main" : agentKey || "main";
 
-  if (!apiKey) {
-    throw new Error(
-      provider === "nvidia"
-        ? "Thiếu NVIDIA API Key. Lấy tại https://build.nvidia.com và thêm NVIDIA_API_KEY vào .env"
-        : "Thiếu OpenRouter API Key"
-    );
-  }
-
-  const chat = new ChatOpenAI({
-    apiKey,
-    openAIApiKey: apiKey,
-    modelName: model,
-    temperature,
-    configuration: { baseURL },
+  const response = await fetch(`${OPENCLAW_BASE}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENCLAW_API_KEY}`,
+      "x-openclaw-agent-id": mappedAgentId,
+    },
+    body: JSON.stringify({
+      model,
+      temperature,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: humanContent },
+      ],
+    }),
   });
 
-  const response = await chat.invoke([new SystemMessage(systemPrompt), new HumanMessage(humanContent)]);
-  return response.content.toString();
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`OpenClaw Gateway lỗi ${response.status}: ${text}`);
+  }
+
+  const json = await response.json();
+  return json.choices?.[0]?.message?.content ?? "";
 }
 
+/**
+ * Gọi OpenClaw Gateway với lịch sử chat (multi-turn).
+ */
 export async function callLLMWithChat(params: {
   systemPrompt: string;
   chatHistory: ChatMessage[];
   model: string;
-  provider: LLMProvider;
-  openRouterKey: string;
-  nvidiaKey: string;
   temperature?: number;
+  agentKey?: string;
 }): Promise<string> {
-  const { systemPrompt, chatHistory, model, provider, openRouterKey, nvidiaKey, temperature = 0.35 } = params;
+  const { systemPrompt, chatHistory, model, temperature = 0.35, agentKey } = params;
 
-  const apiKey = provider === "nvidia" ? nvidiaKey : openRouterKey;
-  const baseURL = provider === "nvidia" ? NVIDIA_BASE : OPENROUTER_BASE;
-
-  if (!apiKey) {
-    throw new Error(
-      provider === "nvidia"
-        ? "Thiếu NVIDIA API Key. Lấy tại https://build.nvidia.com và thêm NVIDIA_API_KEY vào .env"
-        : "Thiếu OpenRouter API Key"
-    );
-  }
-
-  const chat = new ChatOpenAI({
-    apiKey,
-    openAIApiKey: apiKey,
-    modelName: model,
-    temperature,
-    configuration: { baseURL },
-  });
+  const mappedAgentId = agentKey === "master" ? "main" : agentKey || "main";
 
   const messages = [
-    new SystemMessage(systemPrompt),
-    ...chatHistory.map((m) =>
-      m.role === "user" ? new HumanMessage(m.content) : new AIMessage(m.content)
-    ),
+    { role: "system", content: systemPrompt },
+    ...chatHistory.map((m) => ({
+      role: m.role === "user" ? "user" : "assistant",
+      content: m.content,
+    })),
   ];
 
-  const response = await chat.invoke(messages);
-  return response.content.toString();
+  const response = await fetch(`${OPENCLAW_BASE}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENCLAW_API_KEY}`,
+      "x-openclaw-agent-id": mappedAgentId,
+    },
+    body: JSON.stringify({
+      model,
+      temperature,
+      messages,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`OpenClaw Gateway lỗi ${response.status}: ${text}`);
+  }
+
+  const json = await response.json();
+  return json.choices?.[0]?.message?.content ?? "";
 }

@@ -1,13 +1,15 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
-import { analyzePatientCardioRisk, type ChatMessage, type PatientData } from "@/app/actions";
+import { type ChatMessage, type PatientData } from "@/app/actions";
 import { initialPatients } from "@/lib/patients";
 import { calculateRisk, getLdlColumnIndex, getLdlGoal, getRowIndex } from "@/lib/risk";
 import { t } from "@/lib/translations";
 import { loadPromptOverrides } from "@/lib/agents/prompts";
 import { loadPatientAvatars, savePatientAvatar } from "@/lib/patient-avatars";
 import type { AgentKey, Lang, PatientRecord, SpecialistKey } from "@/lib/types";
+import { buildClinicalSummary } from "@/lib/agents/clinical-summary";
+import { getEffectivePrompt } from "@/lib/agents/prompts";
 
 interface SpecialistResults {
   cardiologist?: string;
@@ -20,18 +22,8 @@ interface SpecialistResults {
 interface AppContextValue {
   lang: Lang;
   setLang: (lang: Lang) => void;
-  apiKey: string;
-  setApiKey: (key: string) => void;
-  nvidiaApiKey: string;
-  setNvidiaApiKey: (key: string) => void;
   showKeyInput: boolean;
   setShowKeyInput: (show: boolean) => void;
-  keyStatus: string;
-  openRouterKeyStatus: string;
-  nvidiaKeyStatus: string;
-  saveApiKey: () => void;
-  saveOpenRouterKey: () => void;
-  saveNvidiaKey: () => void;
   aiModel: string;
   setAiModel: (model: string) => void;
   patients: PatientRecord[];
@@ -122,13 +114,8 @@ function propagateToFutureVisits(base: PatientData, target: PatientData): Patien
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLang] = useState<Lang>("vi");
-  const [apiKey, setApiKey] = useState("");
-  const [nvidiaApiKey, setNvidiaApiKey] = useState("");
   const [showKeyInput, setShowKeyInput] = useState(false);
-  const [keyStatus, setKeyStatus] = useState("");
-  const [openRouterKeyStatus, setOpenRouterKeyStatus] = useState("");
-  const [nvidiaKeyStatus, setNvidiaKeyStatus] = useState("");
-  const [aiModel, setAiModel] = useState("deepseek/deepseek-v4-flash:free");
+  const [aiModel, setAiModel] = useState("openclaw");
   const [patients, setPatients] = useState<PatientRecord[]>(initialPatients);
   const [activePatientId, setActivePatientId] = useState("patient1");
   const [activeVisitIndex, setActiveVisitIndex] = useState(0);
@@ -154,16 +141,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [patient, setPatient] = useState<PatientData>(activeVisit.patientData);
 
   useEffect(() => {
-    const savedKey = localStorage.getItem("openrouter_api_key");
-    const savedNvidiaKey = localStorage.getItem("nvidia_api_key");
-    if (savedKey) setApiKey(savedKey);
-    if (savedNvidiaKey) setNvidiaApiKey(savedNvidiaKey);
-    if (!savedNvidiaKey) setShowKeyInput(true);
     setPromptOverrides(loadPromptOverrides());
     setPatientAvatars(loadPatientAvatars());
   }, []);
 
-  const setPatientAvatar = (patientId: string, dataUrl: string) => {
+  const setPatientAvatarFn = (patientId: string, dataUrl: string) => {
     savePatientAvatar(patientId, dataUrl);
     setPatientAvatars((prev) => ({ ...prev, [patientId]: dataUrl }));
   };
@@ -205,30 +187,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatHistory, loadingAi]);
 
-  const saveApiKey = () => {
-    localStorage.setItem("openrouter_api_key", apiKey);
-    localStorage.setItem("nvidia_api_key", nvidiaApiKey);
-    setKeyStatus(t[lang].keySaved);
-    setTimeout(() => {
-      setKeyStatus("");
-      if (nvidiaApiKey) setShowKeyInput(false);
-    }, 1500);
-  };
-
-  const saveOpenRouterKey = () => {
-    localStorage.setItem("openrouter_api_key", apiKey);
-    setOpenRouterKeyStatus(lang === "vi" ? "Đã lưu OpenRouter key" : "OpenRouter key saved");
-    setTimeout(() => setOpenRouterKeyStatus(""), 2000);
-    if (nvidiaApiKey) setShowKeyInput(false);
-  };
-
-  const saveNvidiaKey = () => {
-    localStorage.setItem("nvidia_api_key", nvidiaApiKey);
-    setNvidiaKeyStatus(lang === "vi" ? "Đã lưu NVIDIA key" : "NVIDIA key saved");
-    setTimeout(() => setNvidiaKeyStatus(""), 2000);
-    if (nvidiaApiKey) setShowKeyInput(false);
-  };
-
   const assessment = calculateRisk(patient, lang);
   const colIdx = getLdlColumnIndex(patient);
   const rowIdx = getRowIndex(assessment.rowType);
@@ -246,21 +204,69 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const triggerAiAudit = async () => {
     setLoadingAi(true);
     setAiError("");
-    setChatHistory([]);
+    setChatHistory([{ role: "assistant", content: "" }]);
     setSpecialistResults(null);
     setActiveSpecialistTab(null);
 
-    const result = await analyzePatientCardioRisk(patient, [], apiKey, aiModel);
-    setLoadingAi(false);
+    const clinicalSummary = buildClinicalSummary(patient, {
+      clinicalNotes: activeVisit?.clinicalNotes,
+      visitDate: activeVisit?.visitDate,
+    });
+    const prompt = getEffectivePrompt("master", promptOverrides);
 
-    if (result.success && result.content) {
-      setChatHistory([{ role: "assistant", content: result.content }]);
-      if (result.agents) {
-        setSpecialistResults(result.agents);
-        setActiveSpecialistTab("cardiologist");
+    try {
+      const res = await fetch("/api/openclaw/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentId: "main",
+          payload: {
+            model: "openclaw",
+            stream: true,
+            temperature: 0.25,
+            messages: [
+              { role: "system", content: prompt },
+              { role: "user", content: clinicalSummary }
+            ]
+          }
+        })
+      });
+
+      if (!res.ok) throw new Error(`Lỗi kết nối OpenClaw: ${res.status}`);
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let content = "";
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split("\n");
+          for (const line of lines) {
+            if (line.startsWith("data: ") && line !== "data: [DONE]") {
+              try {
+                const data = JSON.parse(line.slice(6));
+                const delta = data.choices?.[0]?.delta;
+                const agent = data.agent || "master";
+                
+                if (delta?.content) {
+                  const textToAppend = agent !== "master" && !content.includes(`[**${agent}**]:`)
+                    ? `\n\n[**${agent}**]: ${delta.content}`
+                    : delta.content;
+                  content += textToAppend;
+                  setChatHistory([{ role: "assistant", content }]);
+                }
+              } catch (e) {}
+            }
+          }
+        }
       }
-    } else {
-      setAiError(result.error || "Có lỗi xảy ra khi phân tích.");
+    } catch (err: any) {
+      setAiError(err.message || "Có lỗi xảy ra khi phân tích.");
+    } finally {
+      setLoadingAi(false);
     }
   };
 
@@ -268,19 +274,72 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     e.preventDefault();
     if (!userInput.trim()) return;
 
-    const newHistory = [...chatHistory, { role: "user" as const, content: userInput }];
-    setChatHistory(newHistory);
+    const newHistory: ChatMessage[] = [...chatHistory, { role: "user", content: userInput }];
+    setChatHistory([...newHistory, { role: "assistant", content: "" }]);
     setUserInput("");
     setLoadingAi(true);
     setAiError("");
 
-    const result = await analyzePatientCardioRisk(patient, newHistory, apiKey, aiModel);
-    setLoadingAi(false);
+    const clinicalSummary = buildClinicalSummary(patient, {
+      clinicalNotes: activeVisit?.clinicalNotes,
+      visitDate: activeVisit?.visitDate,
+    });
+    const prompt = getEffectivePrompt("master", promptOverrides);
 
-    if (result.success && result.content) {
-      setChatHistory([...newHistory, { role: "assistant", content: result.content }]);
-    } else {
-      setAiError(result.error || "Có lỗi xảy ra khi trao đổi.");
+    try {
+      const res = await fetch("/api/openclaw/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentId: "main",
+          payload: {
+            model: "openclaw",
+            stream: true,
+            temperature: 0.25,
+            messages: [
+              { role: "system", content: prompt },
+              { role: "user", content: `${clinicalSummary}\n\nĐây là lịch sử trao đổi. Bạn hãy tiếp tục trả lời câu hỏi mới nhất của người dùng:` },
+              ...newHistory
+            ]
+          }
+        })
+      });
+
+      if (!res.ok) throw new Error(`Lỗi kết nối OpenClaw: ${res.status}`);
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let content = "";
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split("\n");
+          for (const line of lines) {
+            if (line.startsWith("data: ") && line !== "data: [DONE]") {
+              try {
+                const data = JSON.parse(line.slice(6));
+                const delta = data.choices?.[0]?.delta;
+                const agent = data.agent || "master";
+                
+                if (delta?.content) {
+                  const textToAppend = agent !== "master" && !content.includes(`[**${agent}**]:`)
+                    ? `\n\n[**${agent}**]: ${delta.content}`
+                    : delta.content;
+                  content += textToAppend;
+                  setChatHistory([...newHistory, { role: "assistant", content }]);
+                }
+              } catch (e) {}
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      setAiError(err.message || "Có lỗi xảy ra khi trao đổi.");
+    } finally {
+      setLoadingAi(false);
     }
   };
 
@@ -308,18 +367,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       value={{
         lang,
         setLang,
-        apiKey,
-        setApiKey,
-        nvidiaApiKey,
-        setNvidiaApiKey,
         showKeyInput,
         setShowKeyInput,
-        keyStatus,
-        openRouterKeyStatus,
-        nvidiaKeyStatus,
-        saveApiKey,
-        saveOpenRouterKey,
-        saveNvidiaKey,
         aiModel,
         setAiModel,
         patients,
@@ -358,7 +407,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         promptOverrides,
         setPromptOverrides,
         patientAvatars,
-        setPatientAvatar,
+        setPatientAvatar: setPatientAvatarFn,
         chatBottomRef,
         triggerAiAudit,
         handleSendMessage,

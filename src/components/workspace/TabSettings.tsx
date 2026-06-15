@@ -32,10 +32,6 @@ const ALL_AGENTS: { key: AgentKey; label: string; model: string; provider: strin
 
 export function TabSettings() {
   const {
-    nvidiaApiKey,
-    setNvidiaApiKey,
-    saveNvidiaKey,
-    nvidiaKeyStatus,
     promptOverrides,
     setPromptOverrides,
     lang,
@@ -75,14 +71,14 @@ export function TabSettings() {
 
   const runTest = async (key: AgentKey) => {
     setTestingKey(key);
-    const result = await testAgentModel(key, "", nvidiaApiKey);
+    const result = await testAgentModel(key);
     setTestResults((prev) => ({ ...prev, [key]: result }));
     setTestingKey(null);
   };
 
   const runTestAll = async () => {
     setTestingKey("all");
-    const results = await testAllAgentModels("", nvidiaApiKey);
+    const results = await testAllAgentModels();
     setTestResults(Object.fromEntries(results.map((r) => [r.key, r])));
     setTestingKey(null);
   };
@@ -91,37 +87,6 @@ export function TabSettings() {
 
   return (
     <div className="flex flex-col gap-4 max-w-4xl mx-auto w-full">
-      {/* API Keys — lưu riêng từng key */}
-      <section className="dash-card overflow-hidden">
-        <div className="px-4 py-3 bg-sky-700 text-white flex items-center gap-2">
-          <Key className="w-4 h-4" />
-          <h2 className="text-sm font-semibold">Cấu hình API Key</h2>
-        </div>
-        <div className="p-4 space-y-4">
-          <div className="border border-sky-100 rounded-lg p-3 space-y-2">
-            <label className="block text-[10px] font-semibold text-sky-700 uppercase">NVIDIA API Key</label>
-            <input
-              type="password"
-              value={nvidiaApiKey}
-              onChange={(e) => setNvidiaApiKey(e.target.value)}
-              placeholder="nvapi-..."
-              className="w-full text-xs border border-sky-100 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-400"
-            />
-            <div className="flex items-center gap-2">
-              <button
-                onClick={saveNvidiaKey}
-                className="flex items-center gap-1.5 bg-sky-700 text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg hover:bg-sky-800 cursor-pointer"
-              >
-                <Save className="w-3.5 h-3.5" />
-                Lưu NVIDIA
-              </button>
-              {nvidiaKeyStatus && (
-                <span className="text-[11px] text-emerald-600 font-medium">{nvidiaKeyStatus}</span>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Test models */}
       <section className="dash-card overflow-hidden">

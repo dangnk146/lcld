@@ -1,0 +1,40 @@
+services:
+  openclaw:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: openclaw-gateway
+    restart: unless-stopped
+    network_mode: host
+    # ports:
+    #   - "18789:18789"
+    volumes:
+      # Mount file cấu hình openclaw.json của OpenClaw Gateway
+      - ./openclaw.json:/home/node/.openclaw/openclaw.json
+      
+      # Mount các workspace AI agents độc lập từ thư mục workspace của dự án
+      - ./workspace/main:/home/node/.openclaw/workspace/main
+      - ./workspace/bac_si_tim_mach:/home/node/.openclaw/workspace/bac_si_tim_mach
+      - ./workspace/chuyen_gia_lipid:/home/node/.openclaw/workspace/chuyen_gia_lipid
+      - ./workspace/bac_si_noi_tiet:/home/node/.openclaw/workspace/bac_si_noi_tiet
+      - ./workspace/bac_si_than_hoc:/home/node/.openclaw/workspace/bac_si_than_hoc
+      - ./workspace/duoc_si_lam_sang:/home/node/.openclaw/workspace/duoc_si_lam_sang
+    environment:
+      - NODE_ENV=production
+      # - OPENCLAW_GATEWAY_TOKEN=your-secure-token-here
+    # depends_on:
+    #   - ollama
+
+#  ollama:
+#    image: ollama/ollama:latest
+#    container_name: ollama
+#    restart: unless-stopped
+#    ports:
+#      - "11434:11434"
+#    volumes:
+#      - ./ollama_data:/root/.ollama
+#    deploy:
+#      resources:
+#        reservations:
+#          devices:
+#            - driver: nvidia
+#              count: all
+#              capabilities: [gpu]

@@ -17,6 +17,4 @@ export const SPECIALIST_PROMPTS: Record<SpecialistKey, string> = {
   cardiologist: DEFAULT_PROMPTS.cardiologist,
   lipidologist: DEFAULT_PROMPTS.lipidologist,
   endocrinologist: DEFAULT_PROMPTS.endocrinologist,
-  nephrologist: DEFAULT_PROMPTS.nephrologist,
-  pharmacologist: DEFAULT_PROMPTS.pharmacologist,
 };
