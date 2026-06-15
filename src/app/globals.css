@@ -1,26 +1,127 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --ocean-50: #f0f9ff;
+  --ocean-100: #e0f2fe;
+  --ocean-200: #bae6fd;
+  --ocean-600: #0284c7;
+  --ocean-700: #0369a1;
+  --ocean-800: #075985;
+  --ocean-900: #0c4a6e;
+  --accent-orange: #f97316;
+  --accent-orange-light: #fff7ed;
+  --surface: #ffffff;
+  --text-primary: #0c4a6e;
+  --text-muted: #64748b;
+  --border: #e2e8f0;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: var(--font-montserrat);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-montserrat), system-ui, sans-serif;
+  background: var(--ocean-50);
+  color: #1e293b;
+}
+
+/* Light page background — trắng xanh nước biển */
+.page-bg {
+  background: linear-gradient(180deg, #ffffff 0%, var(--ocean-50) 100%);
+}
+
+/* Card cơ bản */
+.dash-card,
+.card {
+  @apply bg-white rounded-xl border border-sky-100 shadow-sm;
+}
+
+/* Header xanh nước biển */
+.dash-card-blue,
+.card-header {
+  @apply bg-sky-700 text-white rounded-xl border border-sky-600/20 shadow-sm;
+}
+
+/* Header phụ — xanh nhạt hơn */
+.dash-card-violet {
+  @apply bg-sky-800 text-white rounded-xl border border-sky-700/20 shadow-sm;
+}
+
+/* Accent cam */
+.dash-card-amber,
+.card-accent {
+  @apply bg-orange-500 text-white rounded-xl border border-orange-400/30 shadow-sm;
+}
+
+/* Các variant còn lại — đồng bộ light blue */
+.dash-card-emerald {
+  @apply bg-sky-600 text-white rounded-xl border border-sky-500/20 shadow-sm;
+}
+
+.dash-card-rose {
+  @apply bg-sky-900 text-white rounded-xl border border-sky-800/20 shadow-sm;
+}
+
+.dash-card-cyan {
+  @apply bg-sky-500 text-white rounded-xl border border-sky-400/20 shadow-sm;
+}
+
+/* Nút chính */
+.btn-primary {
+  @apply bg-sky-700 hover:bg-sky-800 text-white font-semibold rounded-lg transition-colors cursor-pointer;
+}
+
+.btn-accent {
+  @apply bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-lg transition-colors cursor-pointer;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #bae6fd;
+  border-radius: 999px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: #f0f9ff;
+}
+
+/* Bảng 4 — ô giao: viền cam rõ, không pulse */
+.table4-cell-selected {
+  box-shadow: inset 0 0 0 2px #f97316;
+  outline: 2px solid #fff;
+  outline-offset: -4px;
+}
+
+.table4-row-active {
+  background: #f8fafc !important;
+  color: #0c4a6e !important;
+  font-weight: 600;
+  border-left: 3px solid #f97316 !important;
+}
+
+.table4-col-active {
+  background: #f0f9ff !important;
+  color: #0c4a6e !important;
+  font-weight: 600;
+  border-bottom: 2px solid #f97316 !important;
+}
+
+/* Markdown — chatbot & chẩn đoán AI */
+.markdown-body {
+  word-break: break-word;
+}
+
+.markdown-body > *:first-child {
+  margin-top: 0;
+}
+
+.markdown-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-compact .markdown-body {
+  line-height: 1.45;
 }
