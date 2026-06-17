@@ -22,12 +22,12 @@ fi
 
 echo ""
 echo "[2/3] Khởi động OpenClaw Gateway (Docker)..."
-cd /mnt/d/SDH/MonDangHoc/7.YKhoa/demo/lcld/openclaw
+cd ./openclaw
 docker compose up -d
 echo "✅ Đã khởi động OpenClaw Gateway"
 
 echo ""
 echo "[3/3] Khởi động Next.js Frontend..."
-cd /mnt/d/SDH/MonDangHoc/7.YKhoa/demo/lcld
+cd ..
 echo "Đang mở server Next.js (bạn có thể bấm Ctrl+C để dừng giao diện bất kỳ lúc nào)..."
 npm run dev
